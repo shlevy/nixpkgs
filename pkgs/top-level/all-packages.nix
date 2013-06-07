@@ -131,8 +131,8 @@ let
   # The package compositions.  Yes, this isn't properly indented.
   pkgsFun = pkgs: __overrides:
     with helperFunctions;
-    let defaultScope = pkgs // pkgs.xorg; in
-    helperFunctions // rec {
+    let defaultScope = pkgs // pkgs.xorg; self = self_ // __overrides;
+    self_ = with self; helperFunctions // {
 
   # `__overrides' is a magic attribute that causes the attributes in
   # its value to be added to the surrounding `rec'.  We'll remove this
@@ -9433,4 +9433,4 @@ let
 
   dart = callPackage ../development/interpreters/dart { };
 
-}; in pkgs
+}; in self; in pkgs
