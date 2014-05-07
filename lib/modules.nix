@@ -29,23 +29,46 @@ rec {
         key = _file;
 
         options = {
-          __internal.args = mkOption {
-            description = "Arguments passed to each module.";
+          __internal = {
+            args = mkOption {
+              description = "Arguments passed to each module.";
 
-            # !!! Should this be types.uniq types.unspecified?
-            type = types.attrsOf types.unspecified;
+              # !!! Should this be types.uniq types.unspecified?
+              type = types.attrsOf types.unspecified;
 
-            internal = true;
-          };
+              internal = true;
+            };
 
-          __internal.check = mkOption {
-            description = "Whether to check whether all option definitions have matching declarations.";
+            check = mkOption {
+              description = "Whether to check whether all option definitions have matching declarations.";
 
-            type = types.uniq types.bool;
+              type = types.uniq types.bool;
 
-            internal = true;
+              internal = true;
 
-            default = check;
+              default = check;
+            };
+
+            importSettings = mkOption {
+              description = "The import settings to use for this evaluation.";
+
+              type = types.attrsOf types.unspecified;
+
+              internal = true;
+
+              # !!! The with {}; hack is to avoid parse errors if evaluated with old nix
+              default = with {}; __curSettings;
+            };
+
+            libPath = mkOption {
+              description = "The path of the lib to use for evaluation.";
+
+              type = types.path;
+
+              default = ./.;
+
+              internal = true;
+            };
           };
         };
 
@@ -86,7 +109,23 @@ rec {
         inherit options;
         config = if ! config.value.__internal.check || config.checks then config.value else abort;
       };
-    in result;
+      needsReimport =
+        let
+          newLib = builtins.unsafeDiscardStringContext (toString config.value.__internal.libPath);
+
+          newSettings = mapAttrs (n: v:
+            if n == "nix-path" then map (x:
+              x // { value = builtins.unsafeDiscardStringContext (toString x.value); }
+            ) v else v
+          ) config.value.__internal.importSettings;
+      in newLib != toString ./. ||
+        (builtins ? importWithSettings && newSettings != (with {}; __curSettings));
+      reimport = ((if builtins ? importWithSettings
+        then builtins.importWithSettings config.value.__internal.importSettings
+        else import) config.value.__internal.libPath).evalModules {
+          inherit modules prefix check args;
+        };
+    in if needsReimport then reimport else result;
 
   /* Close a set of modules under the ‘imports’ relation. */
   closeModules = modules: args:
