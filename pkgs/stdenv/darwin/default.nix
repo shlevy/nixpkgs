@@ -73,7 +73,7 @@ rec {
         export NIX_CFLAGS_LINK+=" -stdlib=libc++ -Wl,-rpath,${nativePrefix}/lib"
       '';
 
-      cc = import ../../build-support/cc-wrapper {
+      cc = pkgs.lib.makeOverridable (import ../../build-support/cc-wrapper) {
         nativeTools  = true;
         nativePrefix = nativePrefix;
         nativeLibc   = true;
@@ -121,7 +121,7 @@ rec {
       export NIX_ENFORCE_PURITY=1
     '';
 
-    cc = import ../../build-support/cc-wrapper {
+    cc = pkgs.lib.makeOverridable (import ../../build-support/cc-wrapper) {
       inherit stdenv;
       nativeTools  = false;
       nativeLibc   = true;

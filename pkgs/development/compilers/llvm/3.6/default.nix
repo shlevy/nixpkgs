@@ -22,7 +22,7 @@ let
       inherit clang-tools-extra_src stdenv;
     };
 
-    clang = wrapCC self.clang-unwrapped;
+    clang = stdenv.cc.override { cc = self.clang-unwrapped; };
 
     stdenv = overrideCC stdenv self.clang;
 
