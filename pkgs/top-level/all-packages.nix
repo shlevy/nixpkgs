@@ -8969,7 +8969,6 @@ let
 
   darwin = let
     callPackage = newScope {};
-    cmdline = callPackage ../os-specific/darwin/command-line-tools {};
     apple-source-releases = import ../os-specific/darwin/apple-source-releases { inherit stdenv fetchurl pkgs; };
   in apple-source-releases // rec {
     cctools_cross = callPackage (forceNativeDrv (callPackage ../os-specific/darwin/cctools/port.nix {}).cross) {
@@ -8990,9 +8989,6 @@ let
     osx_private_sdk = callPackage ../os-specific/darwin/osx-private-sdk { inherit osx_sdk; };
 
     security_tool = callPackage ../os-specific/darwin/security-tool { inherit osx_private_sdk; };
-
-    cmdline_sdk   = cmdline.sdk;
-    cmdline_tools = cmdline.tools;
 
     apple_sdk = callPackage ../os-specific/darwin/apple-sdk {};
 
