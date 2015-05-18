@@ -9,7 +9,7 @@ let
     name    = "MacOS_SDK-${version}";
 
     src = fetchurl {
-      url    = "http://swcdn.apple.com/content/downloads/27/02/031-06182/yiervn212jfs091cp9hwmb7gjq7ky91crs/DevSDK_OSX109.pkg";
+      url    = "http://swcdn.apple.com/content/downloads/27/02/031-06182/xxog8vxu8i6af781ivf4uhy6yt1lslex34/DevSDK_OSX109.pkg";
       sha256 = "16b7aplha5573yl1d44nl2yxzp0w2hafihbyh7930wrcvba69iy4";
     };
 
