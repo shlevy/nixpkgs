@@ -1,5 +1,5 @@
 { stdenv, fetchgit, bootPkgs, perl, gmp, ncurses, libiconv, binutils, coreutils
-, autoconf, automake, happy, alex
+, autoconf, automake, happy, alex, target ? null, cross-tools ? null
 }:
 
 let
@@ -10,18 +10,22 @@ in stdenv.mkDerivation rec {
   name = "ghc-${version}";
   rev = "2e8463b232054b788b73e6551947a9434aa76009";
 
+  /*
   src = fetchgit {
     url = "git://git.haskell.org/ghc.git";
     inherit rev;
     sha256 = "12nxai5qqnw42syhd0vzl2f9f8z28rc0fsa7g771dyzpqglak90l";
-  };
+  };*/
+
+  src = builtins.filterSource (name: type: builtins.baseNameOf name != ".git") /Users/shealevy/src/ghc;
 
   patches = [
     ./ghc-HEAD-dont-pass-linker-flags-via-response-files.patch   # https://github.com/NixOS/nixpkgs/issues/10752
   ];
 
   postUnpack = ''
-    pushd ghc-${builtins.substring 0 7 rev}
+    chmod -R +w ghc
+    pushd ghc
     echo ${version} >VERSION
     echo ${rev} >GIT_COMMIT_ID
     patchShebangs .
@@ -29,7 +33,7 @@ in stdenv.mkDerivation rec {
     popd
   '';
 
-  buildInputs = [ ghc perl autoconf automake happy alex ];
+  buildInputs = [ ghc perl autoconf automake happy alex ] ++ stdenv.lib.optional (target != null) cross-tools;
 
   enableParallelBuilding = true;
 
@@ -39,14 +43,19 @@ in stdenv.mkDerivation rec {
     export NIX_LDFLAGS="$NIX_LDFLAGS -rpath $out/lib/ghc-${version}"
   '' + stdenv.lib.optionalString stdenv.isDarwin ''
     export NIX_LDFLAGS+=" -no_dtrace_dof"
+  '' + stdenv.lib.optionalString (target != null) ''
+    sed 's|#BuildFlavour  = quick-cross|BuildFlavour  = quick-cross|' mk/build.mk.sample > mk/build.mk
   '';
 
   configureFlags = [
-    "--with-cc=${stdenv.cc}/bin/cc"
+    "CC=${if target != null then cross-tools else stdenv.cc}/bin/${if target != null then "${target}-" else ""}cc"
+  ] ++ stdenv.lib.optionals (target == null) [
     "--with-gmp-includes=${gmp.dev}/include" "--with-gmp-libraries=${gmp.out}/lib"
     "--with-curses-includes=${ncurses.dev}/include" "--with-curses-libraries=${ncurses.out}/lib"
-  ] ++ stdenv.lib.optional stdenv.isDarwin [
+  ] ++ stdenv.lib.optional (stdenv.isDarwin && target == null) [
     "--with-iconv-includes=${libiconv}/include" "--with-iconv-libraries=${libiconv}/lib"
+  ] ++ stdenv.lib.optionals (target != null) [
+    "--target=${target}"
   ];
 
   # required, because otherwise all symbols from HSffi.o are stripped, and

@@ -4852,6 +4852,12 @@ in
 
   inherit (haskellPackages) ghc;
 
+  ghc-ios = haskell.packages.ghcHEAD.ghc.override {
+    bootPkgs = haskellPackages;
+    target = "arm-apple-darwin10";
+    cross-tools = import ../../../ios-cross { inherit pkgs; };
+  };
+
   cabal-install = haskell.lib.disableSharedExecutables haskellPackages.cabal-install;
 
   stack = haskell.lib.overrideCabal haskellPackages.stack (drv: {
