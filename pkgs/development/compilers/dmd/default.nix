@@ -245,9 +245,9 @@ let
 
     enableParallelBuilding = dmdBuild.enableParallelBuilding;
     preferLocalBuild = true;
+    inputString = builtins.unsafeDiscardStringContext dmdBuild.outPath;
     outputHashAlgo = "sha256";
-    outputHashMode = "recursive";
-    outputHash = "1n159hsmfy0zara8fhd61dpvvz2vwa62hsp7bc6j8f69jhs48kaz";
+    outputHash = builtins.hashString "sha256" inputString;
 
     srcs = dmdBuild.srcs;
 
@@ -264,8 +264,7 @@ let
     '';
 
     installPhase = ''
-        mkdir -p $out
-        touch $out/checked
+        echo -n $inputString > $out
     '';
   };
 
