@@ -54,4 +54,11 @@ lib: let inherit (lib) extrec; in
                  }"}"));
       expected = { a = 2; b.c = 3; d = 2; };
     };
+  testWith =
+    { expr = extrec.fix (extrec.merge
+        (extrec."{"{ a = 1; b = self: self.a + 1; }"}")
+        (extrec."{"{ b = extrec.with' (extrec."{"{ a = 2; }"}"); }"}")
+      );
+      expected = { a = 1; b = 3; };
+    };
 }
