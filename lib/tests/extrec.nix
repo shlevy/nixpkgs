@@ -15,7 +15,10 @@ lib: let inherit (lib) extrec; in
     { expr =
         let base = extrec."{"{ name = "hello";
                                options =
-                                 extrec."{"{ enableGUI = false;
+                                 extrec."{"{ enableGUI = extrec.annotate
+                                               { type = extrec.types.bool;
+                                                 description = "Whether to enable the GUI";
+                                               } false;
                                          }"}";
                            }"}";
             overrides = extrec."{"{ options =
