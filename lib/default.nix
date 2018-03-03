@@ -46,6 +46,8 @@ let
     # Eval-time filesystem handling
     filesystem = callLibs ./filesystem.nix;
 
+    extrec = callLibs ./extensible-records.nix;
+
     # back-compat aliases
     platforms = systems.doubles;
 

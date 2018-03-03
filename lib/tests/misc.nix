@@ -1,9 +1,10 @@
 # to run these tests:
 # nix-instantiate --eval --strict nixpkgs/lib/tests/misc.nix
 # if the resulting list is empty, all tests passed
-with import ../default.nix;
+let lib = import ../default.nix; in
+with lib;
 
-runTests {
+runTests ({
 
 
 # TRIVIAL
@@ -358,4 +359,4 @@ runTests {
     expected = true;
   };
 
-}
+} // import ./extrec.nix lib)
