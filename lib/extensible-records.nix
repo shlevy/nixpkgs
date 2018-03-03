@@ -65,15 +65,14 @@ in { # Create an extensible record. Uses should look syntactically like:
      # TODO lib.types seems more complicated than we need...
      # TODO Do we need to allow annotating nested extrecs.
      annotate = annotation: value:
-       let valid-type = lib.isOptionType type;
-           type = annotation.type or types.unspecified;
-       in throwUnless valid-type
+       let validType =
+             lib.isOptionType (annotation.type or types.unspecified);
+       in throwUnless validType
          "The type given in an annotation must be a proper nixpkgs lib type"
          throwIf (isExtrec value) "Can't annotate an extensible record itself"
          throwIf (isAnnotation value) "Can't annotate an annotation"
          throwIf (isAssign value) "Can't annotate an assignment, assign the annotation instead"
          throwIf (isWith value) "Can't annotate a with, did you want to annotate within the with?"
-         throwUnless (type.check value) "Annotated value doesn't have type ${type.name}"
          { type = "extrec.annotation";
            inherit annotation;
            defs = [ { inherit value; file = "initial annotation definition"; } ];
@@ -168,10 +167,8 @@ in { # Create an extensible record. Uses should look syntactically like:
                       merge lhs' rhs'
                else if isAnnotation lhs'
                  then
-                   let type = lhs'.annotation.type or types.unspecified;
-                       file = "${pos.file}:${toString pos.line}:${toString pos.column}";
-                   in throwUnless (type.check rhs') "Value at ${file} does not have type ${type.name}"
-                        lhs' //
+                   let file = "${pos.file}:${toString pos.line}:${toString pos.column}";
+                   in lhs' //
                           # Ugh, module system types don't have incremental merge.
                          { defs = lhs'.defs ++
                              [ { value = rhs'; inherit file; } ];
@@ -220,24 +217,11 @@ in { # Create an extensible record. Uses should look syntactically like:
                         set = (mapAttrs (fixAttr final) attr.set);
                       }
                else if isAnnotation attr
-                 then let type = attr.annotation.type or null;
-                          inherit (attr) defs;
-                          bad-values =
-                            builtins.filter
-                              (x: !(type.check x.value))
-                              defs;
-                        bad-value-pos =
-                          (builtins.head bad-values).file;
-                        last =
-                          builtins.elemAt
-                            defs
-                            ((builtins.length defs) - 1);
-                    in if type == null
-                         then fixAttr final name last.value
-                       else if bad-values != []
-                         then throw "Value ${builtins.concatStringsSep "." newAttrPath} does not have type ${type.name}, at ${bad-value-pos}."
-                       else # technically someone could sneak in e.g. a nested extensible record here via the merge function. Don't do that.
-                           fixAttr final name (type.merge newAttrPath defs)
+                 then attr //
+                   { defs = map (d:
+                       d // { value = fixAttr final name d.value; }
+                     ) attr.defs;
+                   }
              else if lib.isFunction attr
                then let res = attr final; in
                  throwIf (isExtrec res)
@@ -245,8 +229,29 @@ in { # Create an extensible record. Uses should look syntactically like:
                    res
              else attr;
            recurseFixAttr = final: name: attr:
-             let attr' = fixAttr final name attr; in
-               if isExtrec attr' then fix' attr' (attrPath ++ [ name ]) else attr';
+             let attr' = fixAttr final name attr;
+                 newAttrPath = attrPath ++ [ name ];
+             in if isAnnotation attr'
+                  then let type = attr'.annotation.type or null;
+                           inherit (attr') defs;
+                           badValues = builtins.filter
+                             (x: !(type.check x.value))
+                             defs;
+                           badValuePos =
+                             (builtins.head badValues).file;
+                           last = builtins.elemAt
+                             defs
+                             ((builtins.length defs) - 1);
+                           newAttrPath = attrPath ++ [ name ];
+                       in if type == null
+                            then last.value
+                          else if badValues != []
+                            then throw "Value ${builtins.concatStringsSep "." newAttrPath} does not have type ${type.name}, at ${badValuePos}."
+                          else
+                            type.merge newAttrPath defs
+                else if isExtrec attr'
+                  then fix' attr' newAttrPath
+                else attr';
            final = mapAttrs (recurseFixAttr final) set.set;
        in checkExtrec set "extrec fixpoint argument"
           final; in fix' set [];

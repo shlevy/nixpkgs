@@ -22,7 +22,7 @@ lib: let inherit (lib) extrec; in
                                          }"}";
                            }"}";
             overrides = extrec."{"{ options =
-                                      extrec."{"{ enableGUI = true;
+                                      extrec."{"{ enableGUI = parent: self: true;
                                               }"}";
                                 }"}";
         in extrec.fix (extrec.merge base overrides);
