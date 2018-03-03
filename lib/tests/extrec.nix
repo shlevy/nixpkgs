@@ -39,4 +39,19 @@ lib: let inherit (lib) extrec; in
                 }"}");
       expected = { a = 1; b = 1; c = { d = 1; e = { f = 1; }; }; };
     };
+  testAssign =
+    { expr = extrec.fix (extrec.merge
+        (extrec."{"{ a = 1;
+                     b = extrec."{"{ c = parent: self: parent.a; }"}";
+                     d = extrec.assign 1;
+                 }"}")
+        (extrec."{"{ a = extrec.assign (self: self.a + 1);
+                     b = extrec.assign
+                           (extrec."{"{ c = parent: self:
+                                          parent.b.c + 1;
+                                    }"}");
+                     d = 2;
+                 }"}"));
+      expected = { a = 2; b.c = 3; d = 2; };
+    };
 }

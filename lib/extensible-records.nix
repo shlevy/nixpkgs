@@ -8,6 +8,7 @@
 { lib }:
 let isExtrec = x: (x.type or null) == "extrec";
     isAnnotation = x: (x.type or null) == "extrec.annotation";
+    isAssign = x: (x.type or null) == "extrec.assign";
     call = f: if lib.isFunction f then x: call (f x) else f;
     throwIf = pred: msg: if pred then throw msg else call;
     throwUnless = pred: throwIf (!pred);
@@ -64,24 +65,58 @@ in { # Create an extensible record. Uses should look syntactically like:
          "The type given in an annotation must be a proper nixpkgs lib type"
          throwIf (isExtrec value) "Can't annotate an extensible record itself"
          throwIf (isAnnotation value) "Can't annotate an annotation"
+         throwIf (isAssign value) "Can't annotate an assignment, assign the annotation instead"
          throwUnless (type.check value) "Annotated value doesn't have type ${type.name}"
          { type = "extrec.annotation";
            inherit annotation;
            defs = [ { inherit value; file = "initial annotation definition"; } ];
          };
 
+     # assign an attribute to a specified value, ignoring previous definitons.
+     #
+     # In addition to allowing overriding the merging behavior of a
+     # given attribute, assignment also allows access to the previous*
+     # value of the assigned field, through the fixpoint at the level
+     # the assignment occurred. So:
+     #   fix({{ a = 1; b = {{ c = parent: self: parent.a; }}; }} //
+     #       {{ a := self: self.a + 1;
+     #          b := {{ c = parent: self: parent.b.c + 1; }};
+     #       }}
+     #      ) => { a = 2; b.c = 3; }
+     #
+     # Unless they are annotated themselves, assigned values inherit
+     # the field's preexisting annotation.
+     #
+     # * If the previous value is calculated via the fixpoint, it will
+     #   see the final fixpoint, *not* what it would have seen had the
+     #   final fixpoint occurred before the assignment was merged in!
+     assign = value:
+      { inherit value; type = "extrec.assign"; };
+
      # // for extrecs.
      #
-     # Behaves just like //, except if an attribute is an extrec
-     # itself then nested merging occurs.
+     # If a given field is an extrec, they are recursively merged. If
+     # a given field has an annotation with a type, the type's merge
+     # function is used. If a given field is assigned on the RHS, it
+     # takes priority regardless of merge rules.
      merge = lhs: rhs:
        let dups = builtins.intersectAttrs lhs.set rhs.set;
-           mergeDup = name: rhs':
-             let lhs' = lhs.set.${name};
-                 pos = builtins.unsafeGetAttrPos name rhs.set;
-             in
+           mergeDup = name: rhs': let mergeDup' = name: rhs': lhs':
+             let pos = builtins.unsafeGetAttrPos name rhs.set;
+                 annotatedAssignedRhs =
+                   if !(isAnnotation rhs'.value) && (isAnnotation lhs')
+                     then extrec.annotate lhs'.annotation rhs'.value
+                   else rhs'.value;
+                 rhs'' = rhs' //
+                   { value = annotatedAssignedRhs;
+                     previous = lhs';
+                   };
+             in if isAssign rhs' then rhs'' else
                throwIf (isAnnotation rhs') "can only set annotation on the first occurrence of an attribute in a sequence of merges" (
-               if isExtrec lhs'
+               if isAssign lhs'
+                 then lhs' //
+                   { value = mergeDup' name rhs' lhs'.value; }
+               else if isExtrec lhs'
                  then checkExtrec rhs' "nested extrec override ${name}"
                       merge lhs' rhs'
                else if isAnnotation lhs'
@@ -95,6 +130,7 @@ in { # Create an extensible record. Uses should look syntactically like:
                              [ { value = rhs'; inherit file; } ];
                          }
                else rhs');
+           in mergeDup' name rhs' lhs.set.${name};
            merged = mapAttrs mergeDup dups;
        in checkExtrec lhs "LHS of extrec.merge"
           checkExtrec rhs "RHS of extrec.merge"
@@ -109,30 +145,50 @@ in { # Create an extensible record. Uses should look syntactically like:
      # siblings to properly reference each other through the parent
      # fixpoint.
      fix = set: let fix' = set: attrPath:
-       let fixAttr = name: attr: let newAttrPath = attrPath ++ [ name ]; in
-             if isExtrec attr
-               then { type = "extrec"; set = (mapAttrs fixAttr attr.set); }
-             else if isAnnotation attr
-               then let type = attr.annotation.type or null;
-                        inherit (attr) defs;
-                        bad-values = builtins.filter (x: !(type.check x.value)) defs;
-                        bad-value-pos = (builtins.head bad-values).file;
+       let fixAttr = final: name: attr:
+             let newAttrPath = attrPath ++ [ name ]; in
+               if isAssign attr
+                 then fixAttr
+                   (if attr ? previous
+                     then final //
+                       { "${name}" =
+                           recurseFixAttr final name attr.previous;
+                       }
+                   else removeAttrs final [ name ])
+                   name attr.value
+               else if isExtrec attr
+                 then { type = "extrec";
+                        set = (mapAttrs (fixAttr final) attr.set);
+                      }
+               else if isAnnotation attr
+                 then let type = attr.annotation.type or null;
+                          inherit (attr) defs;
+                          bad-values =
+                            builtins.filter
+                              (x: !(type.check x.value))
+                              defs;
+                        bad-value-pos =
+                          (builtins.head bad-values).file;
+                        last =
+                          builtins.elemAt
+                            defs
+                            ((builtins.length defs) - 1);
                     in if type == null
-                         then fixAttr name (builtins.elemAt defs ((builtins.length defs) - 1)).value
+                         then fixAttr final name last.value
                        else if bad-values != []
                          then throw "Value ${builtins.concatStringsSep "." newAttrPath} does not have type ${type.name}, at ${bad-value-pos}."
                        else # technically someone could sneak in e.g. a nested extensible record here via the merge function. Don't do that.
-                           fixAttr name (type.merge newAttrPath defs)
+                           fixAttr final name (type.merge newAttrPath defs)
              else if lib.isFunction attr
                then let res = attr final; in
                  throwIf (isExtrec res)
                    "nested extensible records should access the fixpoint from individual arguments"
                    res
              else attr;
-           recurseFixAttr = name: attr:
-             let attr' = fixAttr name attr; in
+           recurseFixAttr = final: name: attr:
+             let attr' = fixAttr final name attr; in
                if isExtrec attr' then fix' attr' (attrPath ++ [ name ]) else attr';
-           final = mapAttrs recurseFixAttr set.set;
+           final = mapAttrs (recurseFixAttr final) set.set;
        in checkExtrec set "extrec fixpoint argument"
           final; in fix' set [];
 
