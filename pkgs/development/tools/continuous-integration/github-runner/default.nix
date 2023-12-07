@@ -15,11 +15,12 @@
 , runtimeShell
   # List of Node.js runtimes the package should support
 , nodeRuntimes ? [ "node20" ]
+, nodejs_16
 , nodejs_20
 }:
 
 # Node.js runtimes supported by upstream
-assert builtins.all (x: builtins.elem x [ "node20" ]) nodeRuntimes;
+assert builtins.all (x: builtins.elem x [ "node16" "node20" ]) nodeRuntimes;
 
 buildDotnetModule rec {
   pname = "github-runner";
@@ -214,6 +215,8 @@ buildDotnetModule rec {
 
   preCheck = ''
     mkdir -p _layout/externals
+  '' + lib.optionalString (lib.elem "node16" nodeRuntimes) ''
+    ln -s ${nodejs_16} _layout/externals/node16
   '' + lib.optionalString (lib.elem "node20" nodeRuntimes) ''
     ln -s ${nodejs_20} _layout/externals/node20
   '';
@@ -252,6 +255,8 @@ buildDotnetModule rec {
     # externals/node$version. As opposed to the official releases, we don't
     # link the Alpine Node flavors.
     mkdir -p $out/lib/externals
+  '' + lib.optionalString (lib.elem "node16" nodeRuntimes) ''
+    ln -s ${nodejs_16} $out/lib/externals/node16
   '' + lib.optionalString (lib.elem "node20" nodeRuntimes) ''
     ln -s ${nodejs_20} $out/lib/externals/node20
   '' + ''
