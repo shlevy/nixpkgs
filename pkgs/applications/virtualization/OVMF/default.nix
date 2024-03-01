@@ -41,7 +41,7 @@ let
         archDir = "X64";
       };
     };
-    aarch64 = {
+    riscv = {
       projectDscPath = "ArmVirtPkg/ArmVirtQemu.dsc";
       fwPrefix = "AAVMF";
       msVarsArgs = {
@@ -49,15 +49,17 @@ let
         archDir = "AARCH64";
       };
     };
-    riscv64 = {
+    arm = {
       projectDscPath = "OvmfPkg/RiscVVirt/RiscVVirtQemu.dsc";
       fwPrefix = "RISCV_VIRT";
     };
   };
 
-  cpuName = stdenv.hostPlatform.parsed.cpu.name;
+  inherit (stdenv.hostPlatform.parsed) cpu;
 
-  inherit (platformSpecific.${cpuName})
+  hostPlatformSpecific = platformSpecific.${cpu.name} or platformSpecific.${cpu.family} or null;
+
+  inherit (hostPlatformSpecific)
     projectDscPath fwPrefix msVarsArgs;
 
   version = lib.getVersion edk2;
@@ -73,10 +75,10 @@ let
 
 in
 
-assert platformSpecific ? ${cpuName};
+assert hostPlatformSpecific != null;
 assert systemManagementModeRequired -> stdenv.hostPlatform.isx86;
 assert msVarsTemplate -> fdSize4MB;
-assert msVarsTemplate -> platformSpecific.${cpuName} ? msVarsArgs;
+assert msVarsTemplate -> hostPlatformSpecific ? msVarsArgs;
 
 edk2.mkDerivation projectDscPath (finalAttrs: {
   pname = "OVMF";
