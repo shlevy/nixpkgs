@@ -877,11 +877,9 @@ in
         type = types.package;
         default = (pkgs.OVMF.override {
           secureBoot = cfg.useSecureBoot;
-          systemManagementModeRequired = cfg.useSecureBoot;
         }).fd;
         defaultText = ''(pkgs.OVMF.override {
           secureBoot = cfg.useSecureBoot;
-          systemManagementModeRequired = cfg.useSecureBoot;
         }).fd'';
         description =
         lib.mdDoc "OVMF firmware package, defaults to OVMF configured with secure boot if needed.";
